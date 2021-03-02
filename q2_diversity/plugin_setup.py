@@ -8,7 +8,7 @@
 
 from qiime2.plugin import (Plugin, Str, Properties, Choices, Int, Bool, Range,
                            Float, Set, Visualization, Metadata, MetadataColumn,
-                           Categorical, Numeric, Citations)
+                           Categorical, Numeric, Citations, List)
 
 import q2_diversity
 from q2_diversity import _alpha as alpha
@@ -19,6 +19,7 @@ from q2_types.distance_matrix import DistanceMatrix
 from q2_types.sample_data import AlphaDiversity, SampleData
 from q2_types.tree import Phylogeny, Rooted
 from q2_types.ordination import PCoAResults
+from unifrac._meta import CONSOLIDATIONS
 
 citations = Citations.load('citations.bib', package='q2_diversity')
 
@@ -102,6 +103,63 @@ plugin.pipelines.register_function(
     description=("Computes a user-specified phylogenetic beta diversity metric"
                  " for all pairs of samples in a feature table.")
 )
+
+
+plugin.pipelines.register_function(
+    function=q2_diversity.beta_phylogenetic_meta,
+    inputs={'table': List[FeatureTable[Frequency |
+                          RelativeFrequency |
+                          PresenceAbsence]],
+            'phylogeny': List[Phylogeny[Rooted]]},
+    parameters={'metric': Str % Choices(beta.METRICS['PHYLO']['UNIMPL']),
+                'threads': Int % Range(1, None) | Str % Choices(['auto']),
+                'variance_adjusted': Bool,
+                'alpha': Float % Range(0, 1, inclusive_end=True),
+                'bypass_tips': Bool,
+                'weights': List[Float],
+                'consolidation': Str % Choices(list(CONSOLIDATIONS))},
+    outputs=[('distance_matrix', DistanceMatrix)],
+    input_descriptions={
+        'table': 'The feature tables containing the samples over which beta '
+                 'diversity should be computed.',
+        'phylogeny': 'Phylogenetic trees containing tip identifiers that '
+                     'correspond to the feature identifiers in the table. '
+                     'This tree can contain tip ids that are not present in '
+                     'the table, but all feature ids in the table must be '
+                     'present in this tree.'
+    },
+    parameter_descriptions={
+        'metric': 'The beta diversity metric to be computed.',
+        'threads': threads_description,
+        'variance_adjusted': ('Perform variance adjustment based on Chang et '
+                              'al. BMC Bioinformatics 2011. Weights distances '
+                              'based on the proportion of the relative '
+                              'abundance represented between the samples at a'
+                              ' given node under evaluation.'),
+        'alpha': ('This parameter is only used when the choice of metric is '
+                  'generalized_unifrac. The value of alpha controls importance'
+                  ' of sample proportions. 1.0 is weighted normalized UniFrac.'
+                  ' 0.0 is close to unweighted UniFrac, but only if the sample'
+                  ' proportions are dichotomized.'),
+        'bypass_tips': ('In a bifurcating tree, the tips make up about 50% of '
+                        'the nodes in a tree. By ignoring them, specificity '
+                        'can be traded for reduced compute time. This has the'
+                        ' effect of collapsing the phylogeny, and is analogous'
+                        ' (in concept) to moving from 99% to 97% OTUs'),
+        'weights': 'The weight applied to each tree/table pair. This tuple is '
+                   'expected to be in index order with tables and phylogenies.'
+                   ' Default is to weight each tree/table pair evenly.',
+        'consolidation': 'The matrix consolidation method, which determines '
+                         'how the individual distance matrices are '
+                         'aggregated'
+    },
+    output_descriptions={'distance_matrix': 'The resulting distance matrix.'},
+    name='Beta diversity (phylogenetic) over multiple trees and tables',
+    description="Computes a distance matrix for all pairs of samples in the "
+                "set of feature table and phylogeny pairs, using the unifrac "
+                "implementation of the selected beta diversity metric.",
+)
+
 
 plugin.pipelines.register_function(
     function=q2_diversity.beta,
